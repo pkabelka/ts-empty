@@ -1,0 +1,116 @@
+#!/bin/sh
+# Shell script for listing unused TeamSpeak channels
+
+#TS_SERVERADMIN_USERNAME="serveradmin"
+#TS_SERVERADMIN_PASSWORD=""
+#TS_SERVER_ADDRESS="127.0.0.1"
+#TS_SERVER_QUERY_PORT="10011"
+
+if [ -z "$TS_SERVERADMIN_USERNAME" ]; then
+    read -p "TeamSpeak serveradmin username: [serveradmin]: " TS_SERVERADMIN_USERNAME
+    if [ -z "$TS_SERVERADMIN_USERNAME" ]; then
+        TS_SERVERADMIN_USERNAME="serveradmin"
+    fi
+fi
+
+if [ -z "$TS_SERVERADMIN_PASSWORD" ]; then
+    read -p "TeamSpeak serveradmin password: " TS_SERVERADMIN_PASSWORD
+    if [ -z "$TS_SERVERADMIN_PASSWORD" ]; then
+        echo "TeamSpeak serveradmin password not entered. Exiting"
+        exit 1
+    fi
+fi
+
+if [ -z "$TS_SERVER_ADDRESS" ]; then
+    read -p "TeamSpeak server address: [127.0.0.1]: " TS_SERVER_ADDRESS
+    if [ -z "$TS_SERVER_ADDRESS" ]; then
+        TS_SERVER_ADDRESS="127.0.0.1"
+    fi
+fi
+
+if [ -z "$TS_SERVER_QUERY_PORT" ]; then
+    read -p "TeamSpeak server query port: [10011]: " TS_SERVER_QUERY_PORT
+    if [ -z "$TS_SERVER_QUERY_PORT" ]; then
+        TS_SERVER_QUERY_PORT="10011"
+    fi
+fi
+
+ignored=$(echo "$TS_IGNORED_CHANNELS" | tr -s '\n' '|' | sed -e 's/^|//' -e 's/|$//' -e 's/\s/\\\\s/g')
+
+if [ "$ignored" = "" ]; then
+    # ignore something impossible to appear for empty list
+    ignored=$'\x01'
+fi
+
+channelinfo()
+{
+/usr/bin/expect <<EOF
+spawn telnet $TS_SERVER_ADDRESS $TS_SERVER_QUERY_PORT
+expect "Welcome to the TeamSpeak 3 ServerQuery interface, type \"help\" for a list of commands and \"help <command>\" for information on a specific command.\r\n\r"
+send "login $TS_SERVERADMIN_USERNAME $TS_SERVERADMIN_PASSWORD\r"
+expect "error id=0 msg=ok\r\n\r"
+send "use 1\r"
+expect "error id=0 msg=ok\r\n\r"
+
+match_max 100000
+
+send channellist\r
+expect "error id=0 msg=ok\r\n\r"
+
+set output \$expect_out(buffer)
+match_max 2000
+
+set CHANNELS_CID [exec printf \$output | grep cid | sed -e {s/|/\n/g} | grep -v -E -e {$ignored} | cut -d " " -f 1 | sed {:a;N;\$!ba;s/\n/|/g}]
+set CHANNELS [split \$CHANNELS_CID "|"]
+
+foreach CHANNEL \$CHANNELS {
+    send "channelinfo \$CHANNEL\r"
+    expect "error id=0 msg=ok\r\n\r"
+}
+
+send "logout\r"
+expect "error id=0 msg=ok\r\n\r"
+send "quit\r"
+expect "error id=0 msg=ok\r\n\r"
+EOF
+}
+
+# filter only useful information about channels
+chinfo=$(channelinfo | sed -e 's/\ /\n/g' | sed -e '/cid/p' -e '/channel_name/p' -e '/seconds_empty/!d' | sed -e '/channel_name_phonetic/d')
+
+# filter out non-empty channels
+empty=$(echo $chinfo | sed -e 's/\ /\n/g' | sed -e '/seconds_empty=-1/d' | grep --no-group-separator -B1 ^"seconds_empty")
+seconds=$(echo $empty | sed -e 's/\ /\n/g' | awk '/channel_name/{getline; print}')
+
+# convert seconds into human readable time
+time=""
+for s in $seconds; do
+    s=$(echo $s | sed -e 's/seconds_empty=//g')
+    time=$time+$(eval "echo \| $(date -ud "@$s" +'$((%s/3600/24)) \| %H \| %M \| %S \|')")
+done
+
+# match channel name and converted time
+i=1
+construct()
+{
+    echo $empty | sed -e 's/\\/\\\\/g' | sed -e 's/\ /\n/g' | while read e; do
+    t=$(echo $time | sed -e 's/\+/\n/g' | sed -e "1,${i}d" | sed -e '2,$d')
+    case $e in
+        seconds* ) echo $e | sed -e "s/seconds_empty.*/$t/g" && i=$(($i+1)) && continue
+    esac
+    echo $e
+done
+}
+output=$(construct)
+
+# with column names
+#echo Channel name \| days \| hours \| minutes \| seconds \| $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sed -e {s/\|/@\|/g} | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '@' | sed 's/  |/|/g' | sed '1h;1d;$!H;$!d;G'
+
+# with column names without column separators
+#echo Channel name \| days \| hours \| minutes \| seconds \| $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '|' | sed 's/  |/|/g' | sed '1h;1d;$!H;$!d;G'
+
+# without column names with column separators
+#echo $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sed -e {s/\|/@\|/g} | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '@' | sed 's/  |/|/g'
+
+# without column separators and column names
+echo $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '|'
