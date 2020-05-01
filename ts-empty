@@ -35,7 +35,7 @@ if [ -z "$TS_SERVER_QUERY_PORT" ]; then
     fi
 fi
 
-ignored=$(echo "$TS_IGNORED_CHANNELS" | tr -s '\n' '|' | sed -e 's/^|//' -e 's/|$//' -e 's/\s/\\\\s/g')
+ignored=$(echo "$TS_IGNORED_CHANNELS" | tr -s '\n' '|' | sed -e 's/^|//;s/|$//;s/\s/\\\\s/g')
 
 if [ "$ignored" = "" ]; then
     # ignore something impossible to appear for empty list
@@ -75,17 +75,23 @@ expect "error id=0 msg=ok\r\n\r"
 EOF
 }
 
-channelinfo | tr '\n' ' ' | tr -d '\r' | perl -p -e '
+channelinfo | tr '\n' ' ' | tr -d '\r' | perl -p -n -e '
 s/^.*(?=channellist)//;
 s/(?=cid)/\n/g;
 s/channel_topic.*(?=seconds_empty)//g;
 s/pid=.*(?=channel_name)//g;
-s/\serror.*//g
-' | grep 'seconds_empty' | grep -v 'seconds_empty=-1' | sed -e 's/\s/ @| /g' | column -t -s '@' | sed -e 's/\\s/ /g;s/|/ @| /g' | column -t -s '@' | sed -e 's/^cid=//;s/channel_name=//;s/seconds_empty=//' | sort -r -n -t '|' -k 3 | perl -pe'
+s/\serror.*//g' | \
+grep -e 'seconds_empty' | grep -v -e 'seconds_empty=-1' | sed -e 's/\s/ 禥| /g' | \
+column -t -s '禥' | sed -e 's/\\s/ /g;s/|/ 禥| /g' | column -t -s '禥' | \
+sed -e 's/^cid=//;s/channel_name=//;s/seconds_empty=//' | sort -r -n -t '|' -k 3 | \
+perl -p -n -e'
 use strict;
 sub compound_duration {
     my $sec = shift;
     no warnings "numeric";
-    return join ", ", grep { $_ > 0 } int($sec/60/60/24) . " d", int($sec/60/60) % 24 . " hr", int($sec/60) % 60 . " min", int($sec) % 60 . " sec";
+    return join ", ", grep { $_ > 0 } int($sec/60/60/24) . " d",
+    int($sec/60/60) % 24 . " hr",
+    int($sec/60) % 60 . " min",
+    int($sec) % 60 . " sec";
 }
-;s@(?<=\|)*(?<=\s)*(\d+$)@ compound_duration($1)@e;'
+s@(?<=\|)*(?<=\s)*(\d+$)@ compound_duration($1)@e;'
