@@ -75,42 +75,17 @@ expect "error id=0 msg=ok\r\n\r"
 EOF
 }
 
-# filter only useful information about channels
-chinfo=$(channelinfo | sed -e 's/\ /\n/g' | sed -e '/cid/p' -e '/channel_name/p' -e '/seconds_empty/!d' | sed -e '/channel_name_phonetic/d')
-
-# filter out non-empty channels
-empty=$(echo $chinfo | sed -e 's/\ /\n/g' | sed -e '/seconds_empty=-1/d' | grep --no-group-separator -B1 ^"seconds_empty")
-seconds=$(echo $empty | sed -e 's/\ /\n/g' | awk '/channel_name/{getline; print}')
-
-# convert seconds into human readable time
-time=""
-for s in $seconds; do
-    s=$(echo $s | sed -e 's/seconds_empty=//g')
-    time=$time+$(eval "echo \| $(date -ud "@$s" +'$((%s/3600/24)) \| %H \| %M \| %S \|')")
-done
-
-# match channel name and converted time
-i=1
-construct()
-{
-    echo $empty | sed -e 's/\\/\\\\/g' | sed -e 's/\ /\n/g' | while read e; do
-    t=$(echo $time | sed -e 's/\+/\n/g' | sed -e "1,${i}d" | sed -e '2,$d')
-    case $e in
-        seconds* ) echo $e | sed -e "s/seconds_empty.*/$t/g" && i=$(($i+1)) && continue
-    esac
-    echo $e
-done
+channelinfo | tr '\n' ' ' | tr -d '\r' | perl -p -e '
+s/^.*(?=channellist)//;
+s/(?=cid)/\n/g;
+s/channel_topic.*(?=seconds_empty)//g;
+s/pid=.*(?=channel_name)//g;
+s/\serror.*//g
+' | grep 'seconds_empty' | grep -v 'seconds_empty=-1' | sed -e 's/\s/ @| /g' | column -t -s '@' | sed -e 's/\\s/ /g;s/|/ @| /g' | column -t -s '@' | sed -e 's/^cid=//;s/channel_name=//;s/seconds_empty=//' | sort -r -n -t '|' -k 3 | perl -pe'
+use strict;
+sub compound_duration {
+    my $sec = shift;
+    no warnings "numeric";
+    return join ", ", grep { $_ > 0 } int($sec/60/60/24) . " d", int($sec/60/60) % 24 . " hr", int($sec/60) % 60 . " min", int($sec) % 60 . " sec";
 }
-output=$(construct)
-
-# with column names
-#echo Channel name \| days \| hours \| minutes \| seconds \| $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sed -e {s/\|/@\|/g} | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '@' | sed 's/  |/|/g' | sed '1h;1d;$!H;$!d;G'
-
-# with column names without column separators
-#echo Channel name \| days \| hours \| minutes \| seconds \| $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '|' | sed 's/  |/|/g' | sed '1h;1d;$!H;$!d;G'
-
-# without column names with column separators
-#echo $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sed -e {s/\|/@\|/g} | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '@' | sed 's/  |/|/g'
-
-# without column separators and column names
-echo $output | sed -e 's/channel_name=/\n/g' | sed -e 's/\\\//\//g' -e 's/\\s/\ /g' | sort -t '|' -n -r -k 2,3 -k 3,3 -k 4,4 -k 5,4 | column -t -s '|'
+;s@(?<=\|)*(?<=\s)*(\d+$)@ compound_duration($1)@e;'
