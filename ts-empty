@@ -39,7 +39,7 @@ ignored=$(echo "$TS_IGNORED_CHANNELS" | tr -s '\n' '|' | sed -e 's/^|//;s/|$//;s
 
 if [ "$ignored" = "" ]; then
     # ignore something impossible to appear for empty list
-    ignored=$'\x01'
+    ignored="￼"
 fi
 
 channelinfo()
@@ -81,8 +81,8 @@ s/(?=cid)/\n/g;
 s/channel_topic.*(?=seconds_empty)//g;
 s/pid=.*(?=channel_name)//g;
 s/\serror.*//g' | \
-grep -e 'seconds_empty' | grep -v -e 'seconds_empty=-1' | sed -e 's/\s/ 禥| /g' | \
-column -t -s '禥' | sed -e 's/\\s/ /g;s/|/ 禥| /g' | column -t -s '禥' | \
+grep -e 'seconds_empty' | grep -v -e 'seconds_empty=-1' | sed -e 's/\s/￼| /g' | \
+column -t -s '￼' | sed -e 's/\\s/ /g;s/|/￼| /g' | column -t -s '￼' | \
 sed -e 's/^cid=//;s/channel_name=//;s/seconds_empty=//' | sort -r -n -t '|' -k 3 | \
 perl -p -n -e'
 use strict;
