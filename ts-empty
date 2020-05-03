@@ -81,9 +81,15 @@ s/(?=cid)/\n/g;
 s/channel_topic.*(?=seconds_empty)//g;
 s/pid=.*(?=channel_name)//g;
 s/\serror.*//g' | \
-grep -e 'seconds_empty' | grep -v -e 'seconds_empty=-1' | sed -e 's/\s/￼| /g' | \
-column -t -s '￼' | sed -e 's/\\s/ /g;s/|/￼| /g' | column -t -s '￼' | \
-sed -e 's/^cid=//;s/channel_name=//;s/seconds_empty=//' | sort -r -n -t '|' -k 3 | \
+grep -e 'seconds_empty' | grep -v -e 'seconds_empty=-1' | \
+sed -e 's/\s/￼| /g;
+s/\\s/ /g;
+s/|/￼| /g;
+s/^cid=//;
+s/channel_name=//;
+s/seconds_empty=//' | \
+column -t -s '￼' | \
+sort -r -n -t '|' -k 3 | \
 perl -p -n -e'
 use strict;
 sub compound_duration {
