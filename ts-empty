@@ -84,6 +84,7 @@ s/\serror.*//g' | \
 grep -e 'seconds_empty' | grep -v -e 'seconds_empty=-1' | \
 sed -e 's/\s/￼| /g;
 s/\\s/ /g;
+s/\\\//\//g
 s/|/￼| /g;
 s/^cid=//;
 s/channel_name=//;
