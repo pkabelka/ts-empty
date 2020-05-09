@@ -75,8 +75,8 @@ expect "error id=0 msg=ok\r\n\r"
 EOF
 }
 
-channelinfo | tr '\n' ' ' | tr -d '\r' | perl -p -n -e '
-s/^.*(?=channellist)//;
+channelinfo | tr -d '\r' | grep -A1 --no-group-separator -e '^channelinfo' |\
+sed -e 's/^channelinfo //' | paste -s -d' \n' | perl -p -n -e '
 s/(?=cid)/\n/g;
 s/channel_topic.*(?=seconds_empty)//g;
 s/pid=.*(?=channel_name)//g;
